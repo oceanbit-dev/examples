@@ -38,211 +38,10 @@ import './patch-FileReader';
 
 import {DocumentDirectoryPath} from 'react-native-fs';
 
-import git, {PromiseFsClient} from 'isomorphic-git/index.umd.min.js';
+import git from 'isomorphic-git/index.umd.min.js';
 import http from 'isomorphic-git/http/web/index.js';
 
-import * as promises from './fs';
-
-const fs: PromiseFsClient = {promises};
-
-// This is a useful first smoke test, because it doesn't rely on `fs` or `http`
-const hashBlob = async () => {
-  try {
-    const {oid} = await git.hashBlob({object: 'Hello\nWorld\n'});
-    Alert.alert('hashBlob', oid);
-  } catch (err) {
-    Alert.alert(
-      err.code,
-      `'${err.message}'` +
-        '\n' +
-        err.stack +
-        '\n' +
-        JSON.stringify(err, null, 2),
-    );
-  }
-};
-
-// This is a good 2nd smoke test, because it only relies on `http`
-const getRemoteInfo = async () => {
-  const info = await git.getRemoteInfo({
-    http,
-    url: 'https://github.com/isomorphic-git/isomorphic-git.git',
-  });
-  if (info && info.refs && info.refs.heads) {
-    Alert.alert(
-      'List of remote branches',
-      Object.keys(info.refs.heads).join('\n'),
-    );
-  }
-};
-
-const mkdir = async () => {
-  try {
-    await promises.mkdir(DocumentDirectoryPath + '/repo');
-  } catch (err) {
-    Alert.alert(err.code, err.message + '\n' + JSON.stringify(err, null, 2));
-  }
-};
-
-const readdir = async () => {
-  try {
-    const files = await promises.readdir(DocumentDirectoryPath + '/repo');
-    Alert.alert('readDir', files.join(', '));
-  } catch (err) {
-    Alert.alert(err.code, err.message + '\n' + JSON.stringify(err, null, 2));
-  }
-};
-
-const rmdir = async () => {
-  try {
-    await promises.rmdir(DocumentDirectoryPath + '/repo');
-  } catch (err) {
-    Alert.alert(err.code, err.message + '\n' + JSON.stringify(err, null, 2));
-  }
-};
-
-const writeFile = async () => {
-  try {
-    await promises.writeFile(
-      DocumentDirectoryPath + '/repo/test.txt',
-      'Hello\nWorld\n',
-      'utf8',
-    );
-  } catch (err) {
-    Alert.alert(err.code, err.message + '\n' + JSON.stringify(err, null, 2));
-  }
-};
-
-const readFile = async () => {
-  try {
-    const content = await promises.readFile(
-      DocumentDirectoryPath + '/repo/test.txt',
-      'utf8',
-    );
-    Alert.alert('readFile', content as string);
-  } catch (err) {
-    Alert.alert(err.code, err.message + '\n' + JSON.stringify(err, null, 2));
-  }
-};
-
-const unlink = async () => {
-  try {
-    await promises.unlink(DocumentDirectoryPath + '/repo/test.txt');
-  } catch (err) {
-    Alert.alert(err.code, err.message + '\n' + JSON.stringify(err, null, 2));
-  }
-};
-
-const stat = async () => {
-  try {
-    let stats = await promises.stat(DocumentDirectoryPath + '/repo/test.txt');
-    Alert.alert('stat', JSON.stringify(stats, null, 2));
-  } catch (err) {
-    Alert.alert(
-      err.code,
-      `'${err.message}'` + '\n' + JSON.stringify(err, null, 2),
-    );
-  }
-};
-
-// This is a good 3rd test, because it only uses stat, mkdir, and writeFile
-const init = async () => {
-  try {
-    await git.init({fs, dir: DocumentDirectoryPath + '/repo'});
-  } catch (err) {
-    Alert.alert(
-      err.code,
-      `'${err.message}'` +
-        '\n' +
-        err.stack +
-        '\n' +
-        JSON.stringify(err, null, 2),
-    );
-  }
-};
-
-const add = async () => {
-  try {
-    await git.add({
-      fs,
-      dir: DocumentDirectoryPath + '/repo',
-      filepath: 'test.txt',
-    });
-  } catch (err) {
-    Alert.alert(
-      err.code,
-      `'${err.message}'` +
-        '\n' +
-        err.stack +
-        '\n' +
-        JSON.stringify(err, null, 2),
-    );
-  }
-};
-
-const listFiles = async () => {
-  try {
-    const files = await git.listFiles({
-      fs,
-      dir: DocumentDirectoryPath + '/repo',
-    });
-    Alert.alert('listFiles', files.join(', '));
-  } catch (err) {
-    Alert.alert(
-      err.code,
-      `'${err.message}'` +
-        '\n' +
-        err.stack +
-        '\n' +
-        JSON.stringify(err, null, 2),
-    );
-  }
-};
-
-const commit = async () => {
-  try {
-    const oid = await git.commit({
-      fs,
-      dir: DocumentDirectoryPath + '/repo',
-      message: 'a commit in react native',
-      author: {
-        name: 'React Native',
-      },
-    });
-    Alert.alert('commit', oid);
-  } catch (err) {
-    Alert.alert(
-      err.code,
-      `'${err.message}'` +
-        '\n' +
-        err.stack +
-        '\n' +
-        JSON.stringify(err, null, 2),
-    );
-  }
-};
-
-const log = async () => {
-  try {
-    const commits = await git.log({
-      fs,
-      dir: DocumentDirectoryPath + '/repo',
-    });
-    Alert.alert(
-      'hashBlob',
-      commits.map(c => `${c.oid.slice(0, 7)} ${c.commit.message}`).join('\n'),
-    );
-  } catch (err) {
-    Alert.alert(
-      err.code,
-      `'${err.message}'` +
-        '\n' +
-        err.stack +
-        '\n' +
-        JSON.stringify(err, null, 2),
-    );
-  }
-};
+import {fs} from './fs';
 
 // Note that since we're running isomorphic-git in the main thread, we're competing with React trying to update the UI.
 // In order to achieve smooth progress bars, we need to insert a little pause.
@@ -268,7 +67,7 @@ const clone = async (setPhase: any, setLoaded: any, setTotal: any) => {
       fs,
       http,
       dir: DocumentDirectoryPath + '/repo',
-      url: 'https://github.com/isomorphic-git/examples.git',
+      url: 'https://github.com/unicorn-utterances/unicorn-utterances.git',
       async onProgress({phase, loaded, total}) {
         if (phases[phase]) {
           console.log(phase, loaded, total);
@@ -313,36 +112,6 @@ const App = () => {
             </View>
           )}
           <View style={styles.body}>
-            <View style={styles.buttonContainer}>
-              <Button title="Test hashBlob" onPress={() => hashBlob()} />
-              <Button
-                title="Test getRemoteInfo"
-                onPress={() => getRemoteInfo()}
-              />
-            </View>
-            <View style={styles.buttonContainer}>
-              <Button title="Test mkdir" onPress={() => mkdir()} />
-              <Button title="Test readdir" onPress={() => readdir()} />
-              <Button title="Test rmdir" onPress={() => rmdir()} />
-            </View>
-            <View style={styles.buttonContainer}>
-              <Button title="Test writeFile" onPress={() => writeFile()} />
-              <Button title="Test readFile" onPress={() => readFile()} />
-              <Button title="Test unlink" onPress={() => unlink()} />
-            </View>
-            <View style={styles.buttonContainer}>
-              <Button title="Test stat" onPress={() => stat()} />
-              <Button title="Test init" onPress={() => init()} />
-            </View>
-            <View style={styles.buttonContainer}>
-              <Button title="Test add" onPress={() => add()} />
-              <Button title="Test listFiles" onPress={() => listFiles()} />
-            </View>
-            <View style={styles.buttonContainer}>
-              <Button title="Test commit" onPress={() => commit()} />
-              <Button title="Test log" onPress={() => log()} />
-            </View>
-
             <View style={styles.buttonContainer}>
               <Button
                 title="Test clone"

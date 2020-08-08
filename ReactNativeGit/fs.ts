@@ -1,9 +1,12 @@
+import {PromiseFsClient} from 'isomorphic-git/index.umd.min.js';
 import * as RNFS from 'react-native-fs';
 import {Buffer} from 'buffer';
 
 function Err(name: string) {
   return class extends Error {
     public code = name;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     constructor(...args: any) {
       super(...args);
       if (this.message) {
@@ -15,36 +18,41 @@ function Err(name: string) {
   };
 }
 
+const log = true;
+
 // const EEXIST = Err('EEXIST'); // <-- Unused because RNFS's mkdir never throws
 const ENOENT = Err('ENOENT');
 const ENOTDIR = Err('ENOTDIR');
 // const ENOTEMPTY = Err('ENOTEMPTY'); // <-- Unused because RNFS's unlink is recursive by default
 
-export const readdir = async (path: string) => {
+const readdir = async (path: string) => {
+  log && console.log('readdir', path);
   try {
     return await RNFS.readdir(path);
   } catch (err) {
-    switch (err.message) {
-      case 'Attempt to get length of null array': {
-        throw new ENOTDIR(path);
-      }
-      case 'Folder does not exist': {
-        throw new ENOENT(path);
-      }
-      default:
-        throw err;
+    if (/(?:Folder does not exist|ENOENT)/.exec(err.message)) {
+      log && console.log('Folder does not exist');
+      throw new ENOENT(path);
     }
+    if (/(?:Attempt to get length of null array|ENOTDIR)/.exec(err.message)) {
+      log && console.log('ENOTDIR');
+      throw new ENOTDIR(path);
+    }
+    throw err;
   }
 };
 
-export const mkdir = async (path: string) => {
+const mkdir = async (path: string) => {
+  log && console.log('mkdir', path);
   return RNFS.mkdir(path);
 };
 
-export const readFile = async (
-  path: string,
-  opts?: string | {[key: string]: string},
+const readFile = async (
+    path: string,
+    opts?: string | {[key: string]: string},
 ) => {
+  log && console.log('readFile', path);
+
   let encoding;
 
   if (typeof opts === 'string') {
@@ -54,8 +62,8 @@ export const readFile = async (
   }
 
   let result: string | Uint8Array = await RNFS.readFile(
-    path,
-    encoding || 'base64',
+      path,
+      encoding || 'base64',
   );
 
   if (!encoding) {
@@ -65,11 +73,13 @@ export const readFile = async (
   return result;
 };
 
-export const writeFile = async (
-  path: string,
-  content: string | Uint8Array,
-  opts?: string | {[key: string]: string},
+const writeFile = async (
+    path: string,
+    content: string | Uint8Array,
+    opts?: string | {[key: string]: string},
 ) => {
+  log && console.log('writeFile', path, content);
+
   let encoding;
 
   if (typeof opts === 'string') {
@@ -85,10 +95,18 @@ export const writeFile = async (
     content = Buffer.from(content).toString('base64');
   }
 
+  // DO NOT REMOVE THIS. WHILE THIS SEEMS UNCOMMON, IT"S A WORKAROUND FOR A BUG IN AOSP
+  // https://github.com/crutchcorn/GitShark/issues/17
+  // https://github.com/isomorphic-git/isomorphic-git/issues/1126
+  try {
+    await unlink(path);
+  } catch (e) {}
+
   await RNFS.writeFile(path, content as string, encoding);
 };
 
-export const stat = async (path: string) => {
+const stat = async (path: string) => {
+  log && console.log('stat', path);
   try {
     const r = await RNFS.stat(path);
     // we monkeypatch the result with a `isSymbolicLink` method because isomorphic-git needs it.
@@ -97,46 +115,79 @@ export const stat = async (path: string) => {
     r.isSymbolicLink = () => false;
     return r;
   } catch (err) {
-    switch (err.message) {
-      case 'File does not exist': {
-        throw new ENOENT(path);
-      }
-      default:
-        throw err;
+    if (/(?:File does not exist|ENOENT)/.exec(err.message)) {
+      log && console.log('File does not exist');
+      throw new ENOENT(path);
     }
+    throw err;
   }
 };
 
-// Since there are no symbolic links, lstat and stat are equivalent
-export const lstat = stat;
+const lstat = async (path: string) => {
+  log && console.log('lstat', path);
+  try {
+    const r = await RNFS.lstat(path);
+    // we monkeypatch the result with a `isSymbolicLink` method because isomorphic-git needs it.
+    // Since RNFS doesn't appear to support symlinks at all, we'll just always return false.
+    // @ts-ignore
+    r.isSymbolicLink = () => false;
+    return r;
+  } catch (err) {
+    if (/(?:File does not exist|ENOENT)/.exec(err.message)) {
+      log && console.log('lstat File does not exist');
+      throw new ENOENT(path);
+    }
+    throw err;
+  }
+};
 
-export const unlink = async (path: string) => {
+const unlink = async (path: string) => {
+  log && console.log('path', path);
   try {
     await RNFS.unlink(path);
   } catch (err) {
-    switch (err.message) {
-      case 'File does not exist': {
-        throw new ENOENT(path);
-      }
-      default:
-        throw err;
+    if (/(?:File does not exist|ENOENT)/.exec(err.message)) {
+      log && console.log('File does not exist');
+      throw new ENOENT(path);
     }
+    throw err;
   }
 };
 
 // RNFS doesn't have a separate rmdir method, so we can use unlink for deleting directories too
-export const rmdir = unlink;
+const rmdir = unlink;
 
 // These are optional, which is good because there is no equivalent in RNFS
-export const readlink = async () => {
-  throw new Error('not implemented');
+const readlink = async (path: string) => {
+  log && console.log('readlink', path);
+  const readlinkData = await RNFS.readlink(path);
+  return readlinkData;
 };
-export const symlink = async () => {
-  throw new Error('not implemented');
+const symlink = async (target: string, path: string) => {
+  log && console.log('symlink', target, path);
+  const readlinkData = await RNFS.symlink(target, path);
+  return readlinkData;
 };
 
 // Technically we could pull this off by using `readFile` + `writeFile` with the `mode` option
 // However, it's optional, because isomorphic-git will do exactly that (a readFile and a writeFile with the new mode)
-export const chmod = async () => {
+const chmod = async () => {
+  log && console.log('chmod');
   throw new Error('not implemented');
 };
+
+export const fs = {
+  promises: {
+    readdir,
+    mkdir,
+    readFile,
+    writeFile,
+    stat,
+    lstat,
+    unlink,
+    rmdir,
+    readlink,
+    symlink,
+    chmod,
+  },
+} as PromiseFsClient;
